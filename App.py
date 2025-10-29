@@ -8,6 +8,7 @@
 import pandas as pd
 from influxdb_client import InfluxDBClient
 import matplotlib.pyplot as plt
+import altair as alt
 
 # --- Parámetros de conexión ---
 INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
@@ -32,11 +33,51 @@ data_dht22 = []
 for table in tables_dht22:
     for record in table.records:
         data_dht22.append((record.get_time(), record.get_field(), record.get_value()))
+st.sidebar.header("Filtros")
+days = st.sidebar.slider("Rango de tiempo (días)", 1, 30, 3)
+
+st.title(" Tablero de Monitoreo Industrial")
+st.write("Datos de sensores DHT22 y MPU6050")
 
 df_dht22 = pd.DataFrame(data_dht22, columns=["time", "field", "value"])
 df_dht22 = df_dht22.pivot(index="time", columns="field", values="value")
 df_dht22.plot(subplots=True, figsize=(10,6), title="Variables DHT22")
 plt.show()
+
+def query_data(measurement, fields):
+    fields_filter = " or ".join([f'r._field == "{f}"' for f in fields])
+    query = f'''
+    from(bucket: "{INFLUXDB_BUCKET}")
+      |> range(start: -{days}d)
+      |> filter(fn: (r) => r._measurement == "{measurement}")
+      |> filter(fn: (r) => {fields_filter})
+    '''
+    tables = query_api.query(org=INFLUXDB_ORG, query=query)
+
+    data = []
+    for table in tables:
+        for record in table.records:
+            data.append((record.get_time(), record.get_field(), record.get_value()))
+
+    if len(data) == 0:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(data, columns=["time", "field", "value"])
+    df = df.pivot(index="time", columns="field", values="value")
+    df.index = pd.to_datetime(df.index)
+    return df
+st.subheader(" Sensor DHT22 (Temperatura y Humedad)")
+fields_dht = ["temperatura", "humedad", "sensacion_termica"]
+df_dht = query_data("studio-dht22", fields_dht)
+
+if not df_dht.empty:
+    st.line_chart(df_dht)
+    
+    st.write("Métricas DHT22")
+    st.write(df_dht.describe().T[["mean", "min", "max"]])
+
+else:
+    st.warning("No hay datos para mostrar")
 
 # --- Consulta de datos MPU6050 ---
 query_mpu = '''
@@ -48,6 +89,18 @@ from(bucket: "EXTREME_MANUFACTURING")
       r._field == "gyro_x" or r._field == "gyro_y" or r._field == "gyro_z" or
       r._field == "temperature")
 '''
+st.subheader(" Sensor MPU6050 (Vibraciones y Aceleración)")
+fields_mpu = ["accel_x", "accel_y", "accel_z"]
+df_mpu = query_data("mpu6050", fields_mpu)
+
+if not df_mpu.empty:
+    st.line_chart(df_mpu)
+
+    st.write("Métricas MPU6050")
+    st.write(df_mpu.describe().T[["mean", "min", "max"]])
+
+else:
+    st.warning("No hay datos para mostrar")
 
 tables_mpu = query_api.query(org=INFLUXDB_ORG, query=query_mpu)
 data_mpu = []
