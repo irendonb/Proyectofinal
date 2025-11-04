@@ -1,5 +1,4 @@
 
-pip install streamlit influxdb-client pandas plotly
 
 import pandas as pd
 from influxdb_client import InfluxDBClient
@@ -118,4 +117,4 @@ df_mpu = pd.DataFrame(data_mpu, columns=["time", "field", "value"])
 df_mpu = df_mpu.pivot(index="time", columns="field", values="value")
 df_mpu.plot(subplots=True, figsize=(10,8), title="Variables MPU6050")
 plt.show()
-streamlit run App.py
+
