@@ -1,9 +1,7 @@
-# =========================================================
-# PRÁCTICA: Acceso y Análisis de Datos desde InfluxDB
-# =========================================================
+
 
 # --- Instalación de librerías ---
-!pip install influxdb-client pandas matplotlib
+pip install influxdb-client pandas matplotlib
 # --- Importación de librerías ---
 import pandas as pd
 from influxdb_client import InfluxDBClient
