@@ -25,8 +25,8 @@ def query_data(measurement, fields):
     fields_filter = " or ".join([f'r._field == "{f}"' for f in fields])
     query = f'''
     from(bucket: "{INFLUXDB_BUCKET}")
-      |> range(start: -{days}d)
-      |> filter(fn: (r) => r._measurement == "{measurement}")
+      |> range(start: -1h)
+      |> filter(fn: (r) => r._measurement == "mpu6050")
       |> filter(fn: (r) => {fields_filter})
     '''
     tables = query_api.query(org=INFLUXDB_ORG, query=query)
