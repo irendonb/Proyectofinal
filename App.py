@@ -102,6 +102,17 @@ for table in tables_mpu:
     for record in table.records:
         data_mpu.append((record.get_time(), record.get_field(), record.get_value()))
 
+st.subheader("Métricas DHT22")
+
+if not df_dht22.empty:
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Temperatura promedio (°C)", f"{df_dht22['temperatura'].mean():.1f}")
+    col2.metric("Humedad promedio (%)", f"{df_dht22['humedad'].mean():.1f}")
+    col3.metric("Sensación térmica (°C)", f"{df_dht22['sensacion_termica'].mean():.1f}")
+else:
+    st.info("No hay datos disponibles para el rango de tiempo seleccionado.")
+
+
 df_mpu = pd.DataFrame(data_mpu, columns=["time", "field", "value"])
 df_mpu = df_mpu.pivot(index="time", columns="field", values="value")
 df_mpu.plot(subplots=True, figsize=(10,8), title="Variables MPU6050")
@@ -116,4 +127,5 @@ df_mpu = pd.DataFrame(data_mpu, columns=["time", "field", "value"])
 df_mpu = df_mpu.pivot(index="time", columns="field", values="value")
 df_mpu.plot(subplots=True, figsize=(10,8), title="Variables MPU6050")
 plt.show()
+
 
