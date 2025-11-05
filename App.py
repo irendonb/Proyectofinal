@@ -1,43 +1,26 @@
 import streamlit as st
+import pandas as pd
 import plotly.express as px
 from influxdb_client import InfluxDBClient
-import pandas as pd
-import matplotlib.pyplot as plt
-import altair as alt
 
 # --- Parámetros de conexión ---
 INFLUXDB_URL = st.secrets["INFLUXDB_URL"]
 INFLUXDB_TOKEN = st.secrets["INFLUXDB_TOKEN"]
 INFLUXDB_ORG = st.secrets["INFLUXDB_ORG"]
 INFLUXDB_BUCKET = st.secrets["INFLUXDB_BUCKET"]
+
 # --- Inicializar cliente ---
 client = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
 query_api = client.query_api()
 
-# --- Consulta de datos DHT22 ---
-query_dht22 = '''
-from(bucket: "EXTREME_MANUFACTURING")
-  |> range(start: -3d)
-  |> filter(fn: (r) => r._measurement == "studio-dht22")
-  |> filter(fn: (r) => r._field == "humedad" or r._field == "temperatura" or r._field == "sensacion_termica")
-'''
-
-tables_dht22 = query_api.query(org=INFLUXDB_ORG, query=query_dht22)
-data_dht22 = []
-for table in tables_dht22:
-    for record in table.records:
-        data_dht22.append((record.get_time(), record.get_field(), record.get_value()))
+# --- Configuración lateral ---
 st.sidebar.header("Filtros")
 days = st.sidebar.slider("Rango de tiempo (días)", 1, 30, 3)
 
 st.title(" Tablero de Monitoreo Industrial")
-st.write("Datos de sensores DHT22 y MPU6050")
+st.write("Datos de sensores **DHT22** y **MPU6050**")
 
-df_dht22 = pd.DataFrame(data_dht22, columns=["time", "field", "value"])
-df_dht22 = df_dht22.pivot(index="time", columns="field", values="value")
-df_dht22.plot(subplots=True, figsize=(10,6), title="Variables DHT22")
-plt.show()
-
+# --- Función para consultar datos ---
 def query_data(measurement, fields):
     fields_filter = " or ".join([f'r._field == "{f}"' for f in fields])
     query = f'''
@@ -47,85 +30,44 @@ def query_data(measurement, fields):
       |> filter(fn: (r) => {fields_filter})
     '''
     tables = query_api.query(org=INFLUXDB_ORG, query=query)
-
     data = []
     for table in tables:
         for record in table.records:
             data.append((record.get_time(), record.get_field(), record.get_value()))
 
-    if len(data) == 0:
+    if not data:
         return pd.DataFrame()
-
+    
     df = pd.DataFrame(data, columns=["time", "field", "value"])
-    df = df.pivot(index="time", columns="field", values="value")
-    df.index = pd.to_datetime(df.index)
+    df = df.pivot(index="time", columns="field", values="value").reset_index()
     return df
+
+# --- Sensor DHT22 ---
 st.subheader(" Sensor DHT22 (Temperatura y Humedad)")
 fields_dht = ["temperatura", "humedad", "sensacion_termica"]
 df_dht = query_data("studio-dht22", fields_dht)
 
 if not df_dht.empty:
-    st.line_chart(df_dht)
-    
-    st.write("Métricas DHT22")
-    st.write(df_dht.describe().T[["mean", "min", "max"]])
+    fig_dht = px.line(df_dht, x="time", y=fields_dht, title="Lecturas DHT22")
+    st.plotly_chart(fig_dht, use_container_width=True)
 
+    st.write("**Métricas DHT22**")
+    st.dataframe(df_dht.describe().T[["mean", "min", "max"]])
 else:
-    st.warning("No hay datos para mostrar")
+    st.warning("No hay datos disponibles del sensor DHT22 para este rango de tiempo.")
 
-# --- Consulta de datos MPU6050 ---
-query_mpu = '''
-from(bucket: "EXTREME_MANUFACTURING")
-  |> range(start: -3d)
-  |> filter(fn: (r) => r._measurement == "mpu6050")
-  |> filter(fn: (r) =>
-      r._field == "accel_x" or r._field == "accel_y" or r._field == "accel_z" or
-      r._field == "gyro_x" or r._field == "gyro_y" or r._field == "gyro_z" or
-      r._field == "temperature")
-'''
+# --- Sensor MPU6050 ---
 st.subheader(" Sensor MPU6050 (Vibraciones y Aceleración)")
 fields_mpu = ["accel_x", "accel_y", "accel_z"]
 df_mpu = query_data("mpu6050", fields_mpu)
 
 if not df_mpu.empty:
-    st.line_chart(df_mpu)
+    fig_mpu = px.line(df_mpu, x="time", y=fields_mpu, title="Lecturas MPU6050")
+    st.plotly_chart(fig_mpu, use_container_width=True)
 
-    st.write("Métricas MPU6050")
-    st.write(df_mpu.describe().T[["mean", "min", "max"]])
-
+    st.write("**Métricas MPU6050**")
+    st.dataframe(df_mpu.describe().T[["mean", "min", "max"]])
 else:
-    st.warning("No hay datos para mostrar")
-
-tables_mpu = query_api.query(org=INFLUXDB_ORG, query=query_mpu)
-data_mpu = []
-for table in tables_mpu:
-    for record in table.records:
-        data_mpu.append((record.get_time(), record.get_field(), record.get_value()))
-
-st.subheader("Métricas DHT22")
-
-if not df_dht22.empty:
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Temperatura promedio (°C)", f"{df_dht22['temperatura'].mean():.1f}")
-    col2.metric("Humedad promedio (%)", f"{df_dht22['humedad'].mean():.1f}")
-    col3.metric("Sensación térmica (°C)", f"{df_dht22['sensacion_termica'].mean():.1f}")
-else:
-    st.info("No hay datos disponibles para el rango de tiempo seleccionado.")
-
-
-df_mpu = pd.DataFrame(data_mpu, columns=["time", "field", "value"])
-df_mpu = df_mpu.pivot(index="time", columns="field", values="value")
-df_mpu.plot(subplots=True, figsize=(10,8), title="Variables MPU6050")
-plt.show()# --- Visualización de datos DHT22 ---
-df_dht22 = pd.DataFrame(data_dht22, columns=["time", "field", "value"])
-df_dht22 = df_dht22.pivot(index="time", columns="field", values="value")
-df_dht22.plot(subplots=True, figsize=(10,6), title="Variables DHT22")
-plt.show()
-
-# --- Visualización de datos MPU6050 ---
-df_mpu = pd.DataFrame(data_mpu, columns=["time", "field", "value"])
-df_mpu = df_mpu.pivot(index="time", columns="field", values="value")
-df_mpu.plot(subplots=True, figsize=(10,8), title="Variables MPU6050")
-plt.show()
+    st.warning("No hay datos disponibles del sensor MPU6050 para este rango de tiempo.")
 
 
