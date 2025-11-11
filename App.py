@@ -69,6 +69,4 @@ if not df_mpu.empty:
     st.dataframe(df_mpu.describe().T[["mean", "min", "max"]])
 else:
     st.warning("No hay datos disponibles del sensor MPU6050 para este rango de tiempo.")
-    st.dataframe(df_mpu.describe().T[["mean", "min", "max"]])
-else:
-    st.warning("No hay datos disponibles del sensor MPU6050 para este rango de tiempo.")
+  
